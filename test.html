@@ -1,0 +1,512 @@
+<cfquery datasource="#request.dsn#" name="get_requests">
+	SELECT 	re.*, v.*, c.*, s.*, r.*, f.frequencyDescription
+	FROM release re 
+		INNER JOIN version v ON re.releaseID = v.releaseID
+		INNER JOIN cycle c ON v.versionID = c.versionID
+		INNER JOIN systemType s ON v.systemTypeID = s.systemTypeID
+		INNER JOIN requests r ON r.requestID = c.requestID
+		INNER JOIN frequency f ON f.frequencyID = r.frequencyID
+	WHERE c.cycleID = #url.cycleID#
+</cfquery>
+
+<cfquery datasource="#request.dsn#" name="get_newcustomerid">
+	select *from bti_customers where customeremail = '#get_requests.requestorEmail#'
+</cfquery>
+<cfquery datasource="#request.dsn#" name="get_allusers">
+	SELECT c.firstName, c.lastName, c.customerEmail, c.customerID
+    FROM bti_customers c
+    WHERE c.Active = 1 ORDER BY c.firstName
+</cfquery>
+
+<cfquery datasource="#request.dsn#" name="get_allCyclesInRelease">
+	SELECT cycleID, cycleNo, buildCompleteDate FROM cycle
+		WHERE versionID = #get_requests.versionID# AND buildCompleteDate <> ''
+	ORDER BY buildCompleteDate DESC
+</cfquery>
+
+<cfquery datasource="#request.dsn#" name="getAllNonCompleteCycles">
+    SELECT c.*,re.requestStatus FROM cycle c 
+	INNER JOIN requests re ON c.requestID= re.requestID
+	Where re.requestStatus=1 AND c.versionID = #get_requests.versionID# 
+    AND (c.cycleConfirm<>0 OR c.cycleConfirm is NULL) AND buildCompleteDate is NULL
+    ORDER BY buildDate ASC, cycleID
+ </cfquery>
+
+<cfquery datasource="#request.dsn#" name="getVersiontableBuildStartTime">
+		select buildStartTime from version where versionID=#get_requests.versionID#
+	</cfquery>
+
+<cfquery datasource="#request.dsn#" name="getReasonvalue">
+	Select substring(reason,0,PATINDEX('%*##%', reason))
+	 as actualreason FROM requests  where requestID=#get_requests.requestid#
+</cfquery>
+
+<!---<cfquery datasource="#request.dsn#" name="getUserRequestedTime">
+	Select substring(reason,PATINDEX('%*##%', reason)+3, 50)
+ 	as BuildStartTime FROM requests  where requestID=#get_requests.requestid#
+</cfquery>--->
+
+<cfquery datasource="#request.dsn#" name="getresonText">
+	select reason from requests where requestID=#get_requests.requestid#
+</cfquery>
+<!---<cfquery datasource="#request.dsn#" name="getpattternindex">
+	select PATINDEX('%*##%', reason) AS indexexist from requests where requestID=#get_requests.requestid#
+</cfquery>
+--->
+<cfset vStartTime="">
+
+
+	<cfif #get_requests.cycleBuildStartTime# neq "">
+		<cfset vStartTime=#get_requests.cycleBuildStartTime#>
+     <!---<cfif #getAllNonCompleteCycles.recordcount# neq 0>--->
+		<cfelseif #getVersiontableBuildStartTime.buildStartTime# neq "" >
+     		<cfset vStartTime="#getVersiontableBuildStartTime.buildStartTime#">
+    <!--- </cfif>--->   
+	<cfelse>
+     	<cfset vStartTime="1:00 AM">
+	</cfif>
+    
+<!---<cfelse>
+	<cfif #get_requests.cycleBuildStartTime# neq "">
+		<cfset vStartTime=#get_requests.cycleBuildStartTime#>
+    <cfelse>
+     	<cfset vStartTime="1:00 AM">
+	</cfif>
+</cfif>--->
+	
+  <!---<cfif #getpattternindex.indexexist# neq '0'>
+			 <!---if *## is present in reaon value--->
+             <cfif #getUserRequestedTime.BuildStartTime# neq '(N/A)'  >
+                 <cfset vstartTime="#getUserRequestedTime.BuildStartTime#">
+             <cfelseif #getVersiontableBuildStartTime.buildStartTime# neq "" >
+                  <cfset vstartTime="#getVersiontableBuildStartTime.buildStartTime#">
+			<cfelse>
+                     <cfset vstartTime="1:00 AM">
+              </cfif>
+  <cfelse>
+             <cfif #getVersiontableBuildStartTime.buildStartTime# eq "">
+                  <cfset vstartTime="1:00 AM">
+              <cfelse>
+                 <cfset vstartTime="#getVersiontableBuildStartTime.buildStartTime#">
+              </cfif>
+   </cfif>--->
+   <!---END of <cfif #getpattternindex.indexexist# neq '0'>--->
+       
+
+<!--- Show media images? --->
+<cfif #get_allCyclesInRelease.recordCount# GT 0>
+	<cfif  #get_allCyclesInRelease.cycleID# EQ #url.cycleID#>
+	<cfset vDisplayMediaImageLink = 1>
+	<cfelse>
+	<cfset vDisplayMediaImageLink = 0>
+	</cfif>
+<cfelse>
+	<cfset vDisplayMediaImageLink = 0>
+</cfif>
+<!--- <cfoutput>Display Link =		#vDisplayMediaImageLink#<br>
+</cfoutput> --->
+<cfif #get_requests.systemType# IS NOT 'ANY'>
+	<cfset vBuildName = "#get_requests.suiteAbbr# #get_requests.systemType# #get_requests.version#">
+	<cfset vBuildTitle = "#get_requests.releaseName# #get_requests.systemType# #get_requests.version#">
+<cfelse>
+	<cfset vBuildName = "#get_requests.suiteAbbr# #get_requests.version#">
+	<cfset vBuildTitle = "#get_requests.releaseName# #get_requests.version#">
+</cfif> 
+
+<cfif #get_requests.suffix# IS NOT ''>
+	<cfset vBuildName = vBuildName & " #get_requests.suffix#" & " Cycle #get_requests.cycleNo#">
+	<cfset vBuildTitle = vBuildTitle & " #get_requests.suffix#" & " Cycle #get_requests.cycleNo#">
+<cfelse>
+	<cfset vBuildName = vBuildName & " #get_requests.suffix#" & " Cycle #get_requests.cycleNo#">
+	<cfset vBuildTitle = vBuildTitle & " #get_requests.suffix#" & " Cycle #get_requests.cycleNo#">
+</cfif>
+			
+<cfif #get_requests.cycleRecut# is 1>
+	<cfset vBuildTitle = #vBuildTitle# & " (recut)">
+</cfif>
+
+ 
+<cfset vPageTitle = "#vBuildTitle#">
+<cfinclude template="nav.cfm">
+
+<cfoutput query="get_requests">
+<h2>#vPageTitle#</h2>
+<br><br>
+<meta http-equiv=refresh content="180; URL=build_details.cfm?cycleid=#url.cycleID#">
+<table>
+	<tr>
+		<td>
+			<table width="550" class="data">
+				<tr class="header"><td colspan="2" align="center"><h3>Build Details</h3></td></tr>
+				<tr>
+					<td align="right">Build Completed On/Current Status:</td>
+					<td width="60%">
+					<cfinclude template="determineBuildStatus.cfm">
+					</td>
+				</tr>
+				<tr>
+					<td align="right">Currently Scheduled Build Date:</td>
+					<td width="60%">#DayofWeekAsString(DayofWeek(get_requests.buildDate))#, #DateFormat(get_requests.buildDate, 'MMMM D, YYYY')#&nbsp;&nbsp; <a href="cfadmin/requests/buildRequests_updateCycle.cfm?Change=1&cycleID=#url.cycleID#"><b>Change</b></a></td>
+				</tr>
+				<cfif #get_requests.originalbuilddate# NEQ #get_requests.builddate#>
+					<tr>
+						<td align="right">Originally Scheduled Build Date:</td>
+						<td>#DayofWeekAsString(DayofWeek(get_requests.originalbuildDate))#, #DateFormat(get_requests.originalbuildDate, 'MMMM D, YYYY')#</td>
+					</tr>
+					</cfif>
+					<cfif #get_requests.milestoneInfo# IS NOT "">
+						<tr>
+							<td align="right">Milestone:</td>
+							<td><strong>#get_requests.milestoneInfo#</strong></td>
+						</tr>
+					</cfif>
+					<tr>
+						<td align="right">Type of Build:</td>
+						<td>#get_requests.frequencyDescription#</td>
+					</tr>
+                    <form action="build_details_action.cfm?cycleID=#url.cycleID#" name="updateBuildstartTime" method="post">
+                    <tr>
+                    	<td align="right">Build Start Time</td>
+                        <td>
+                       <cfif not #isDefined("url.editStartTime")#>
+                        #vStartTime#&nbsp;&nbsp;&nbsp;<cfif #vStartTime# neq 'ASAP'>Pacific Time</cfif>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                      </cfif>  
+                      <cfif #Session.userID# NEQ -1 AND #session.isAdmin# EQ 1>
+                      	<cfif #isDefined("url.editStartTime")#>
+                        <input type="hidden" name="timeChange" value="">
+                        <input type="hidden" name="cycleBuildCOmpleteDate" value="#get_requests.buildCompleteDate#">
+                        <input type="hidden" name="nonCompleteCycleCount" value="#getAllNonCompleteCycles.RecordCount#">
+					<input type="text" size="10" name="buildtime"  maxlength="15" value="#vStartTime#" />&nbsp;<input type="submit" value="Update Build Start Time" onClick="javascript:startTimeChangeConfirm();">
+						<cfelse>
+							<strong><a href="build_details.cfm?editStartTime=1&cycleID=#url.cycleID#">Edit </a></strong>
+						</cfif>
+					 </cfif></td>
+                        
+                    </tr>
+                    </form>
+					<!---<cfset vMinorVersion = #ListLast(get_requests.version, '.')#>--->
+					<cfset vNextCycleNo = #get_requests.cycleNo#+1>
+					<cfset vPreviousCycleNo = #get_requests.cycleNo#-1>
+					<!--- If the CycleNo is less than 10, then we need to append 00 --->
+					<cfif #vNextCycleNo# LT 10 >
+						<cfset vNextCycleNo = "00#vNextCycleNo#">
+					<cfelseif #vNextCycleNo# LT 100>
+						<cfset vNextCycleNo = "0#vNextCycleNo#">
+					</cfif>
+					<!--- If the CycleNo is less than 10, then we need to append 00 --->
+					<cfif #vPreviousCycleNo# LT 10 >
+						<cfset vPreviousCycleNo = "00#vPreviousCycleNo#">
+					<cfelseif #vPreviousCycleNo# LT 100>
+						<cfset vPreviousCycleNo = "0#vPreviousCycleNo#">
+					</cfif>
+					<cfquery datasource="#request.dsn#" name="get_nextCycle">
+						SELECT c.cycleID, c.buildDate, c.cycleNo FROM cycle c
+                        	INNER JOIN requests req ON c.requestID= req.requestID 
+							WHERE req.requestStatus=1 AND c.versionID = #get_requests.versionID# 
+							AND cycleNo >= '#vNextCycleNo#'
+						ORDER BY cycleNo ASC
+					</cfquery>
+					<cfquery datasource="#request.dsn#" name="get_previousCycle">
+						SELECT c.cycleID,c.buildDate, c.cycleNo FROM cycle c
+                        	INNER JOIN requests req ON c.requestID= req.requestID 
+							WHERE req.requestStatus=1 AND c.versionID = #get_requests.versionID# 
+                            AND cycleNo <= '#vPreviousCycleNo#'
+						ORDER BY cycleNo DESC
+					</cfquery>
+					<cfif get_previousCycle.RecordCount EQ 0 AND get_nextCycle.RecordCount EQ 0>
+						<tr>
+							<td align="right">Next/Previous Build:</td>
+							<td>This is the only scheduled build of this release level.</td>
+						</tr>
+					<cfelse>
+						<tr>
+							<td align="right">Next Scheduled Build:</td>
+							<td>
+							<cfif #get_nextCycle.RecordCount# NEQ 0>
+								<a href="build_details.cfm?cycleID=#get_nextCycle.cycleID#">Cycle #get_nextCycle.CycleNo#,  #DateFormat(get_nextCycle.buildDate, 'MMMM DD, YYYY')#</a>
+							<cfelse>
+								This is the last scheduled build of this release level.
+							</cfif>
+							</td>
+						</tr>
+						<tr>
+							<td align="right">Previous Build:</td>
+							<td>
+							<cfif #get_previousCycle.RecordCount# NEQ 0>
+								<a href="build_details.cfm?cycleID=#get_previousCycle.cycleID#">Cycle #get_previousCycle.CycleNo#,  #DateFormat(get_previousCycle.buildDate, 'MMMM DD, YYYY')#</a>
+							<cfelse>
+								This is the first build of this release level.
+							</cfif>
+							</td>
+						</tr>
+					</cfif>
+					<form action="build_details_action.cfm?cycleID=#url.cycleID#" name="updateSubmittedBy" method="post">
+                    <cfset vSubmittedBy = #get_newcustomerid.customerID#>
+                    <tr>
+						<td align="right">Requested by:</td>
+						<td>
+							<cfif not #isdefined("url.editSubmittedBy")#>
+                    			<a href="mailto:#get_requests.requestorEmail#">#get_requests.requestor#</a>&nbsp;&nbsp;&nbsp;
+                        	</cfif>
+                        	<cfif #Session.userID# NEQ -1 AND #session.isAdmin# EQ 1>
+                      			<cfif #isDefined("url.editSubmittedBy")#>
+                            		<select name="editSubmittedBy">
+										<cfloop query="get_allusers">
+											<option <cfif #vSubmittedBy# EQ #customerID#>selected</cfif> value="#customerID#">#firstName# #lastName#</option>
+										</cfloop>
+									</select>&nbsp;<input type="submit" value="Update">
+                             	<cfelse>
+									<strong><a href="build_details.cfm?editSubmittedBy=1&cycleID=#url.cycleID#">Edit </a></strong>
+							 	</cfif>
+                         	</cfif>                           
+                        </td>	
+					</tr>
+                    </form>
+               <form action="build_details_action.cfm?cycleID=#url.cycleID#" name="updateBuildReason" method="post">
+					<tr> 
+						<td align="right">Reason for Request:</td>
+					<td>
+                    <cfif not #isDefined("url.editReason")#>
+                    	<cfif #getReasonvalue.actualreason# neq "">
+							<pre style="font-family:Arial;">#getReasonvalue.actualreason#</pre>
+                    	<cfelse>
+                    		<pre style="font-family:Arial;">#getresonText.reason#</pre>
+						</cfif>
+                    <strong><a href="build_details.cfm?editReason=1&cycleID=#url.cycleID#">Edit Reason for Request</a></strong>
+                    <cfelse>
+                    	<cfif #getReasonvalue.actualreason# neq "">
+                    	<textarea wrap="hard" cols="55" rows="4" name="editReason" style="font-size:8pt;">#getReasonvalue.actualreason#</textarea>
+                        <cfelse>
+                        	<textarea wrap="hard" cols="55" rows="4" name="editReason" style="font-size:8pt;">#getresonText.reason#</textarea>
+                        </cfif>
+							<div align="right"><input type="submit" value="Update Reason"></div>
+                    </cfif>
+                    </td>
+					</tr>
+                    </form>
+					<cfif #vDisplayMediaImageLink# EQ 1>
+						<cfif #get_requests.fileShare# IS NOT "">
+							<tr>
+								<td align="right">File Share:</td>
+								<td><a href="#get_requests.fileShare#">#get_requests.fileShare#</a></td>
+							</tr>
+						</cfif>
+						<cfif #get_requests.hardDiskShare# IS NOT "">
+							<tr>
+								<td align="right">Hard disk images of the CDs:</td>
+								<td><a href="#get_requests.hardDiskShare#">#get_requests.hardDiskShare#</a></td>
+							</tr>
+						</cfif>
+					</cfif>
+			<form action="build_details_action.cfm?cycleID=#url.cycleID#" name="updateBuildDetails" method="post">
+			<tr>
+				<td align="right">Comments/Remarks for this build:</td>
+				<td>
+				
+				<cfif (#Session.userID# NEQ -1 AND #session.isAdmin# EQ 1) or (#Session.email# eq #get_requests.requestorEmail#)>
+					<cfif #get_requests.buildEmailComments# IS "">
+						<cfif #isDefined("url.editComment")#>
+							<textarea wrap="soft" cols="50" rows="4" name="editComments" style="font-size:8pt;">#buildEmailComments#</textarea>
+							<div align="right"><input type="submit" value="Update Comment"></div>
+						<cfelse>
+							<strong><a href="build_details.cfm?editComment=1&cycleID=#url.cycleID#">Add build comment</a></strong>
+						</cfif>
+					<cfelse>
+						<cfif #isDefined("url.editComment")#>
+							<textarea wrap="soft" cols="50" rows="4" name="editComments" style="font-size:8pt;">#buildEmailComments#</textarea>
+							<div align="right"><input type="submit" value="Update Comment"></div>
+						<cfelse>
+							#Replace(buildEmailComments,Chr(13),"<br>","all")#
+							<br>
+							<strong><a href="build_details.cfm?editComment=1&cycleID=#url.cycleID#">Edit build comment</a></strong>
+						</cfif>
+					</cfif>	
+				<cfelse>
+					<cfif #get_requests.buildEmailComments# IS "">
+						None
+					<cfelse>
+						#Replace(buildEmailComments,Chr(13),"<br>","all")#
+					</cfif>	
+				</cfif>
+				</td>
+			</tr>
+			</form>
+			<cfif #buildComments# IS NOT "">
+				<tr>
+					<td align="right">Fixes in this Build:</td>
+					<td><a href="#application.pagePath#buildFixes.cfm?cycleID=#cycleID#">Review the patches in this cycle</a>.</td>
+				</tr>
+			<cfelseif #buildComments# IS "" AND #buildCompleteDate# IS NOT "">
+		<tr>
+			<td align="right">Fixes in this Build:</td>
+            <cfif (#Session.userID# NEQ -1 AND #session.isAdmin# EQ 1)>
+			<td>Applied patch data was not entered for this cycle.<br>There was either no data to report, or patch information is not stored in PatchManager for this type of release. Please click <b><a href="#application.pagePath#buildFixes.cfm?cycleID=#cycleID#&isNoComments=1">here</a></b> to enter data. </td>
+            <cfelse>
+            <td>Applied patch data was not entered for this cycle.<br>There was either no data to report, or patch information is not stored in PatchManager for this type of release.</td>
+            </cfif>
+		</tr>
+	</cfif>
+</table>
+</cfoutput>
+<br>
+
+<cfif vDateCompareResult NEQ -1 AND #get_status.recordCount# NEQ 0>
+	<table width="550" class="data">
+		<tr class="header">
+			<td colspan="5" align="center"><h3>Status of the Build</h3></td></tr>
+		<tr class="header">
+			<td>StatusID</td>
+			<td align="center">Product</td>
+			<td align="center">Date/Time Stamp</td>
+			<td align="center">Status</td>
+			<td align="center">Gen Machine</td>
+		</tr>
+		<cfif #get_status.recordCount# EQ 0>
+		<tr>
+			<td colspan="4" align="center">No products have been built for this Release.</td>
+		</tr>
+		</cfif>
+		<cfoutput query="get_status" group="statusProductUpper">
+			<cfif #StatusCode# IS "Failed">
+				<tr style="color:red;">
+			<cfelseif #StatusCode# IS "Completed">
+				<tr style="color:black;">
+			<cfelse>
+				<tr style="color:orange;">
+			</cfif>
+					<td align="center">#StatusID#</td>
+					<td>#statusProduct#</td>
+					<td align="left" nowrap >#DateFormat(statusDate, "M/D/YY")# - #TimeFormat(statusDate, "H:MM:SS tt")#</td>
+					<td align="center"><a  href="##" onclick="javascript:showPopup('#statusProduct#','#url.cycleID#');">#statusCode#</a></td>
+					<td align="center">#statusMachine#</td>
+				</tr>
+		</cfoutput>	
+		</tr>
+	</table>
+	<br>
+
+<!--- ONLY SHOW ERRORS IF THE BUILD HAS BEEN STARTED --->
+<cfif #get_status.recordCount# GT 0>
+	<cfquery datasource="#request.dsn#" name="get_errors">
+		SELECT * FROM Errors 
+			WHERE ErrorSuite = '#get_requests.SuiteAbbr#' AND 
+				ErrorSuiteLevel = '#get_requests.version#' AND 
+				ErrorCycle = '#get_requests.cycleNo#' AND 
+				errorStatus = 'Unresolved' AND ErrorIC = ' '
+	</cfquery>
+	<cfquery datasource="#request.dsn#" name="get_ResolvedErrors">
+		SELECT * FROM Errors 
+			WHERE ErrorSuite = '#get_requests.SuiteAbbr#' AND 
+				ErrorSuiteLevel = '#get_requests.version#' AND
+				ErrorCycle = '#get_requests.cycleNo#' AND 
+				errorStatus <> 'Unresolved' AND ErrorIC = ' '
+	</cfquery>
+	<cfif #get_errors.RecordCount# EQ 0 AND #get_ResolvedErrors.RecordCount# EQ 0>
+		<table width="550" class="data">
+			<tr class="header">
+				<td colspan="5" align="center"><h3>Error Report</h3></td></tr>
+			<tr>
+				<td colspan="5" align="center">No errors have been reported for this build.</td>
+			</tr>
+		</table>
+	<cfelse>
+	
+	<cfoutput>
+		<table width="550" class="data">
+			<tr class="header">
+				<td colspan="5" align="center"><h3>Unresolved Errors</h3></td></tr>
+			<tr class="header">
+				<td>ErrorID</td>
+				<td align="center">Error Product</td>
+				<td align="center">Date/Time Stamp</td>
+				<td align="center">Error Description</td>
+				<!--- <td align="center">Error Status</td> --->
+			</tr>
+			<cfif #get_errors.recordCount# EQ 0>
+				<tr>
+					<td colspan="5" align="center">All errors have been resolved.</td>
+				</tr>
+			</cfif>
+			<cfloop query="get_errors">
+				<cfif #errorStatus# IS "Unresolved">
+					<tr style="color:red;">
+				<cfelse>
+					<tr>
+				</cfif>
+						<td align="center">#ErrorID#</td>
+						<td>#errorProduct#</td>
+						<td align="left" nowrap style="font-size:8pt;">#DateFormat(errorDate, "M/D/YY")# - #TimeFormat(errorDate, "H:MM:SS tt")#</td>
+						<td>#errorDescription#</td>
+						<!--- <td align="center">#errorStatus#</td> --->
+				</tr>
+			</cfloop>			
+		</table>
+	</cfoutput>
+	<br>
+	<cfinclude template="errorClassify.cfm">
+
+	<cfoutput>
+		<table width="550" class="data">
+			<tr class="header">
+				<td colspan="5" align="center"><h3>Resolved Errors</h3></td>
+			</tr>
+			<tr class="header">
+				<td>ErrorID</td>
+				<td align="center">Error Product</td>
+				<td align="center">Date/Time Stamp</td>
+				<td align="center">Error Description</td>
+				<!--- <td align="center">Error Status</td> --->
+			</tr>
+			<cfif #get_ResolvedErrors.recordCount# EQ 0>
+				<tr>
+					<td colspan="5" align="center">No errors occurred.</td>
+				</tr>
+			</cfif>
+			<cfloop query="get_ResolvedErrors">
+				<cfif #errorStatus# IS "Unresolved">
+					<tr bgcolor="white" style="color:red;">
+				<cfelse>
+					<tr bgcolor="white">
+				</cfif>
+						<td align="center">#ErrorID#</td>
+						<td>#errorProduct#</td>
+						<td align="left" nowrap style="font-size:8pt;">#DateFormat(errorDate, "M/D/YY")# - #TimeFormat(errorDate, "H:MM:SS tt")#</td>
+						<td>#errorDescription#</td>
+						<!--- 	<td align="center">#errorStatus#</td> --->
+				</tr>
+			</cfloop>		
+		</table>
+	</td>
+</tr>
+</table>
+</cfoutput>
+<br>
+</cfif>
+</cfif>
+</cfif>
+
+<script language="javascript">
+function showPopup(page,cycleid)
+	{
+		
+		window.open('ProgressHistory.cfm?Product='+page+'&Cycleid='+cycleid, 'showHelp', 'width=600, height=300, menubar=no, status=no, location=no, toolbar=no, resizable=yes, scrollbars=yes');
+	}
+	
+	function startTimeChangeConfirm()
+	{
+		//alert(document.updateBuildstartTime.nonCompleteCycleCount.value);
+		//var vTimechange=confirm("Do you like the build start time change to apply to all non completed cycles?.");
+		if(document.updateBuildstartTime.cycleBuildCOmpleteDate.value =="" && document.updateBuildstartTime.nonCompleteCycleCount.value >1)
+		{
+		  	var vTimechange=window.showModalDialog("yesNoWindow.cfm","","dialogHeight:125px;dialogWidth:530px;status:no; scrollbars:no");
+		  	if(vTimechange)
+		  	document.updateBuildstartTime.timeChange.value="Yes";
+			else
+		 		document.updateBuildstartTime.timeChange.value="No";
+				
+		}
+		
+	}
+
+</script>
+<cfinclude template="footer.cfm">
